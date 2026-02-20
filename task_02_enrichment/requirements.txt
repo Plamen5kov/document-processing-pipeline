@@ -1,0 +1,4 @@
+requests>=2.31
+tenacity>=8.2
+pytest>=7.4
+responses>=0.23      # declarative HTTP mocking for requests
