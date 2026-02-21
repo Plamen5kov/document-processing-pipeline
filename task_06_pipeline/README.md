@@ -378,68 +378,9 @@ only the corresponding handler's `__init__` — not the pipeline structure.
 The full end-to-end flow, including all short-circuit exits and the circuit
 breaker state machine embedded inside `EnrichmentHandler`.
 
-```mermaid
-flowchart TD
-    START([Submission Payload Received])
+See [pipeline_diagram.mmd](pipeline_diagram.mmd).
 
-    subgraph COR["Pattern: Chain of Responsibility — each handler controls its own exit"]
-
-        HASH["Compute SHA-256 Idempotency Key\nPattern: Cache-Aside"]
-        HASH --> CACHE_HIT{Key Already in Cache?}
-        CACHE_HIT -- "Yes · replay" --> REPLAY([Return Cached Result\nwas_replay = true])
-        CACHE_HIT -- "No · first seen" --> VALIDATE[Check Required Fields\ncompany_id · company_name · revenue · industry · state]
-
-        VALIDATE --> VALID{All Fields Present?}
-        VALID -- "No — hard stop" --> ERR([status = ERROR · Pipeline Halted])
-        VALID -- "Yes" --> TRIAGE["Apply Underwriting Rules\nPattern: Strategy — first match wins"]
-
-        TRIAGE --> VERDICT{Rule Verdict?}
-        VERDICT -- "DECLINED — hard stop" --> DECLINED([status = DECLINED · Pipeline Halted])
-        VERDICT -- "MANUAL_REVIEW" --> MR_WARN[Add Warning · status = MANUAL_REVIEW · Continue]
-        VERDICT -- "No match" --> APPROVE[status = APPROVED · Continue]
-
-        MR_WARN --> DEDUP[Check company_id Against Known Submissions\nFuzzy String Match]
-        APPROVE --> DEDUP
-
-        DEDUP --> DUP{Duplicate Detected?}
-        DUP -- "Yes — soft flag" --> DUP_WARN[Add Warning · status = DUPLICATE · Continue]
-        DUP -- "No" --> CB_CHECK
-        DUP_WARN --> CB_CHECK
-
-        CB_CHECK{"Pattern: Circuit Breaker\nCurrent State?"}
-        CB_CHECK -- "OPEN · fast-fail" --> SKIP[Skip Risk API\nenrichment_failed = circuit_open · Continue]
-        CB_CHECK -- "CLOSED or HALF_OPEN\nallow request" --> RETRY["Call Risk Enrichment API\nPattern: Retry — tenacity × 3"]
-
-        RETRY --> API{API Response?}
-        API -- "Success" --> ENRICH_OK[Store Enrichment Data\ncall record_success]
-        API -- "All retries exhausted" --> ENRICH_FAIL[Mark enrichment_failed\ncall record_failure · increment count]
-
-        ENRICH_FAIL --> THRESH{failure_count >= threshold?}
-        THRESH -- "Yes" --> OPEN_CB[Circuit → OPEN\nFuture calls fast-fail for recovery_timeout s]
-        THRESH -- "No" --> CHAIN_END
-        OPEN_CB --> CHAIN_END
-        ENRICH_OK --> CHAIN_END
-        SKIP --> CHAIN_END
-
-        CHAIN_END[End of Handler Chain]
-    end
-
-    START --> HASH
-    CHAIN_END --> CACHE_STORE["Store Full SubmissionContext in Cache\nPattern: Cache-Aside — write on first run"]
-    CACHE_STORE --> DONE([Return SubmissionContext to Caller\nstatus · enrichment_data · warnings · errors])
-
-    subgraph CB_FSM["Pattern: Circuit Breaker — State Machine"]
-        direction LR
-        S_CLOSED(("CLOSED\nnormal"))
-        S_OPEN(("OPEN\nfast-fail"))
-        S_HALF(("HALF_OPEN\nprobe"))
-
-        S_CLOSED -- "failure_count >= threshold" --> S_OPEN
-        S_OPEN -- "recovery_timeout elapsed" --> S_HALF
-        S_HALF -- "probe success" --> S_CLOSED
-        S_HALF -- "probe failure\ntimer resets" --> S_OPEN
-    end
-```
+To render: paste the file contents into [mermaid.live](https://mermaid.live), or open the README preview with the `bierner.markdown-mermaid` VSCode extension.
 
 **Hard short-circuits** (chain stops, no further handlers run):
 
@@ -471,8 +412,9 @@ flowchart TD
 
 ```
 task_06_pipeline/
-├── pipeline.py        # Handler base, all concrete handlers, SubmissionPipeline
-├── circuit_breaker.py # Three-state circuit breaker (CLOSED / OPEN / HALF_OPEN)
+├── pipeline.py          # Handler base, all concrete handlers, SubmissionPipeline
+├── circuit_breaker.py   # Three-state circuit breaker (CLOSED / OPEN / HALF_OPEN)
+├── pipeline_diagram.mmd # Mermaid source for the pipeline flowchart
 └── tests/
     └── test_pipeline.py
 ```

@@ -1,0 +1,95 @@
+%%{init: {"flowchart": {"padding": 20, "nodeSpacing": 40, "rankSpacing": 40, "subGraphTitleMargin": {"top": 10, "bottom": 40}}}}%%
+flowchart TD
+    START([Submission Payload Received])
+
+    subgraph COR["Chain of Responsibility — each handler controls its own exit"]
+
+        subgraph CACHE_ASIDE_R["Cache-Aside — check store before processing"]
+            HASH[Compute SHA-256 Idempotency Key]
+            CACHE_HIT{Key Already in Cache?}
+            REPLAY([Return Cached Result\nwas_replay = true])
+        end
+
+        VALIDATE[Check Required Fields\ncompany_id · company_name · revenue · industry · state]
+        VALID{All Fields Present?}
+        ERR([status = ERROR · Pipeline Halted])
+
+        subgraph STRATEGY["Strategy — first-match-wins rule evaluation"]
+            TRIAGE[Apply Underwriting Rules]
+            VERDICT{Rule Verdict?}
+            DECLINED([status = DECLINED · Pipeline Halted])
+            MR_WARN[Add Warning · status = MANUAL_REVIEW · Continue]
+            APPROVE[status = APPROVED · Continue]
+        end
+
+        DEDUP[Check company_id Against Known Submissions\nFuzzy String Match]
+        DUP{Duplicate Detected?}
+        DUP_WARN[Add Warning · status = DUPLICATE · Continue]
+
+        subgraph CIRCUIT_BREAKER["Circuit Breaker — fast-fail on sustained API failure"]
+            CB_CHECK{Current State?}
+            SKIP[Skip Risk API\nenrichment_failed = circuit_open · Continue]
+        end
+
+        subgraph RETRY_PAT["Retry — tenacity × 3 with exponential back-off"]
+            RETRY[Call Risk Enrichment API]
+            API{API Response?}
+            ENRICH_OK[Store Enrichment Data\ncall record_success]
+            ENRICH_FAIL[Mark enrichment_failed\ncall record_failure · increment count]
+        end
+
+        THRESH{failure_count >= threshold?}
+        OPEN_CB[Circuit → OPEN\nFuture calls fast-fail for recovery_timeout s]
+        CHAIN_END[End of Handler Chain]
+
+        %% All connections defined after subgraph declarations so the
+        %% layout engine resolves placement with the full graph visible
+        HASH --> CACHE_HIT
+        CACHE_HIT -- "Yes · replay" --> REPLAY
+        CACHE_HIT -- "No · first seen" --> VALIDATE
+        VALIDATE --> VALID
+        VALID -- "No — hard stop" --> ERR
+        VALID -- "Yes" --> TRIAGE
+        TRIAGE --> VERDICT
+        VERDICT -- "DECLINED — hard stop" --> DECLINED
+        VERDICT -- "MANUAL_REVIEW" --> MR_WARN
+        VERDICT -- "No match" --> APPROVE
+        MR_WARN --> DEDUP
+        APPROVE --> DEDUP
+        DEDUP --> DUP
+        DUP -- "Yes — soft flag" --> DUP_WARN
+        DUP -- "No" --> CB_CHECK
+        DUP_WARN --> CB_CHECK
+        CB_CHECK -- "OPEN · fast-fail" --> SKIP
+        CB_CHECK -- "CLOSED or HALF_OPEN\nallow request" --> RETRY
+        RETRY --> API
+        API -- "Success" --> ENRICH_OK
+        API -- "All retries exhausted" --> ENRICH_FAIL
+        ENRICH_FAIL --> THRESH
+        THRESH -- "Yes" --> OPEN_CB
+        THRESH -- "No" --> CHAIN_END
+        OPEN_CB --> CHAIN_END
+        ENRICH_OK --> CHAIN_END
+        SKIP --> CHAIN_END
+    end
+
+    START --> HASH
+
+    subgraph CACHE_ASIDE_W["Cache-Aside — write after full chain completes"]
+        CACHE_STORE[Store Full SubmissionContext under Idempotency Key]
+    end
+
+    CHAIN_END --> CACHE_STORE
+    CACHE_STORE --> DONE([Return SubmissionContext to Caller\nstatus · enrichment_data · warnings · errors])
+
+    subgraph CB_FSM["Circuit Breaker — State Machine"]
+        direction LR
+        S_CLOSED(("CLOSED\nnormal"))
+        S_OPEN(("OPEN\nfast-fail"))
+        S_HALF(("HALF_OPEN\nprobe"))
+
+        S_CLOSED -- "failure_count >= threshold" --> S_OPEN
+        S_OPEN -- "recovery_timeout elapsed" --> S_HALF
+        S_HALF -- "probe success" --> S_CLOSED
+        S_HALF -- "probe failure\ntimer resets" --> S_OPEN
+    end
