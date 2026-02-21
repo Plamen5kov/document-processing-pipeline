@@ -1,4 +1,4 @@
-# Task 05 — Idempotent Submission Processing
+# Task 02 — Idempotent Submission Processing
 
 ## The Problem
 
@@ -32,7 +32,7 @@ ON CONFLICT (company_id) DO NOTHING;
 
 **Why this is insufficient:**
 - `company_id` is assigned by the broker — two different brokers can submit the
-  same company with different IDs (the deduplication problem from Task 03).
+  same company with different IDs (the deduplication problem from Task 04).
 - It doesn't prevent duplicate processing — the enrichment API is called before
   the INSERT, so two concurrent workers still call it twice.
 - It conflates "same company" with "same submission." The unique constraint should
@@ -235,7 +235,7 @@ keys, content hashing is the most practical approach.
 **`threading.Lock` vs `asyncio.Lock`**
 
 `threading.Lock` is the right primitive when:
-- The code runs in threads (as it does here — task_02's `ThreadPoolExecutor` pattern)
+- The code runs in threads (as it does here — task_05's `ThreadPoolExecutor` pattern)
 - The lock may be held across blocking I/O
 
 `asyncio.Lock` is the right primitive when:
@@ -284,7 +284,7 @@ the idempotency key computation is wrong (every delivery looks "new").
 ## File Structure
 
 ```
-task_05_idempotency/
+task_02_idempotency/
 ├── store.py        # IdempotencyStore ABC + InMemoryIdempotencyStore
 ├── processor.py    # IdempotentProcessor with double-checked locking
 └── tests/

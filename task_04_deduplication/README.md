@@ -1,4 +1,4 @@
-# Task 03 — Conflict Detection (Deduplication)
+# Task 04 — Conflict Detection (Deduplication)
 
 ## The Problem
 
@@ -376,7 +376,7 @@ records, but we also do not lose it.
 ## File Structure
 
 ```
-task_03_deduplication/
+task_04_deduplication/
 ├── normalizer.py   # String cleaning pipeline
 ├── detector.py     # Inverted index + fuzzy match
 └── tests/

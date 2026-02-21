@@ -1,4 +1,4 @@
-# Task 02 — Data Enrichment
+# Task 05 — Data Enrichment
 
 ## The Problem
 
@@ -384,7 +384,7 @@ or crash; it reports.
 ## File Structure
 
 ```
-task_02_enrichment/
+task_05_enrichment/
 ├── mapper.py       # camelCase → snake_case key normalisation
 ├── client.py       # HTTP client: retry decorator + exception hierarchy
 ├── enricher.py     # Batch enrichment: ThreadPoolExecutor + as_completed

@@ -23,7 +23,7 @@ writing one new class and one new `set_next()` call.
 
 ## Why Not Just Strategy Again?
 
-Strategy (Task 01) solves a **selection** problem: given a set of alternatives, pick
+Strategy (Task 03) solves a **selection** problem: given a set of alternatives, pick
 the one that matches. The engine iterates the list; the rules don't know about each
 other; they all answer the same question.
 
@@ -262,7 +262,7 @@ needs to change unless it wants to read that field.
 The last test — `test_adding_new_handler_without_touching_existing_ones` —
 verifies this claim. An `AuditLogHandler` is inserted mid-chain with zero
 changes to any existing class. This is the same Open/Closed Principle
-demonstrated in Task 01, applied at the pipeline level.
+demonstrated in Task 03, applied at the pipeline level.
 
 ---
 
@@ -350,19 +350,19 @@ idempotency contract is that the outcome is identical, not just similar.
 ## How the Tasks Connect
 
 ```
-task_04  Free text → ExtractedSubmission (LLM + Pydantic schema enforcement)
+task_01  Free text → ExtractedSubmission (LLM + Pydantic schema enforcement)
                               ↓
                          raw payload dict
                               ↓
-task_06  IdempotencyHandler   (task_05 pattern — SHA-256 hash, cache-aside)
+task_06  IdempotencyHandler   (task_02 pattern — SHA-256 hash, cache-aside)
               ↓
-         ValidationHandler   (task_01 models — Pydantic field validation)
+         ValidationHandler   (task_03 models — Pydantic field validation)
               ↓
-         TriageHandler        (task_01 rules — Strategy pattern inside CoR)
+         TriageHandler        (task_03 rules — Strategy pattern inside CoR)
               ↓
-         DeduplicationHandler (task_03 pattern — fuzzy match pre-filter)
+         DeduplicationHandler (task_04 pattern — fuzzy match pre-filter)
               ↓
-         EnrichmentHandler    (task_02 pattern — retry, ThreadPoolExecutor)
+         EnrichmentHandler    (task_05 pattern — retry, ThreadPoolExecutor)
               ↓
          SubmissionContext    (final result — status, enrichment, warnings)
 ```

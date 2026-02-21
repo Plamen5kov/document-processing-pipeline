@@ -1,4 +1,4 @@
-# Task 04 — LLM Data Extraction with Schema Enforcement
+# Task 01 — LLM Data Extraction with Schema Enforcement
 
 ## The Problem
 
@@ -9,7 +9,7 @@ broker sending a free-text email like:
 > manufacturing business doing around $4.5M in annual revenue."
 
 The system needs to turn that prose into a structured `Submission` object that can
-be triaged by the rules engine from Task 01. To do that, it must call an LLM.
+be triaged by the rules engine from Task 03. To do that, it must call an LLM.
 
 The challenge: **LLM outputs are unstructured and probabilistic.** The same prompt
 can produce:
@@ -33,7 +33,7 @@ Kalepa's engineering blog describes coupling two agents:
 - **Judging Agent**: validates whether the output meets the required schema
 
 In this implementation, **Pydantic IS the judging agent**. It enforces the output
-contract with the same mechanism used at the broker input boundary (Task 01) —
+contract with the same mechanism used at the broker input boundary (Task 03) —
 the difference is that here all fields are `Optional` because a partial extraction
 is more useful than a failed one.
 
@@ -119,17 +119,17 @@ In production, swap in an `AnthropicClient` or `OpenAIClient`. In tests, use
 `MockLLMClient` with pre-programmed responses. No API key required to run the
 test suite.
 
-This is the same Dependency Inversion principle from Task 01 (rules injected into
-the engine) and Task 02 (HTTP client injected into the enricher) — applied here
+This is the same Dependency Inversion principle from Task 03 (rules injected into
+the engine) and Task 05 (HTTP client injected into the enricher) — applied here
 to the LLM layer.
 
 ---
 
 ### `Optional` Fields on LLM Output Models
 
-Task 01's `Submission` model has all required fields — missing a field is a bug.
+Task 03's `Submission` model has all required fields — missing a field is a bug.
 
-Task 04's `ExtractedSubmission` has all `Optional` fields — missing a field is
+Task 01's `ExtractedSubmission` has all `Optional` fields — missing a field is
 expected. The source text may not contain every piece of information. A partial
 extraction that has `company_name` and `revenue` is enough to run triage; we do
 not need to discard it because `zip_code` was not mentioned.
@@ -176,7 +176,7 @@ JSON object. Example: {"company_name": "Acme", "revenue": 5000000, ...}
 This mirrors how a human would respond to a colleague who misunderstood the
 first instruction: you don't repeat the exact same words, you clarify.
 
-Unlike Task 02's tenacity retries (infrastructure failures), these retries are
+Unlike Task 05's tenacity retries (infrastructure failures), these retries are
 about **prompt iteration** — each attempt has a better chance of success because
 the prompt carries forward what went wrong.
 
@@ -195,7 +195,7 @@ A change to the revenue coercion logic (e.g., handle `"€4.5M"`) → only `mode
 A change to the retry strategy (e.g., 3 retries instead of 2) → only `extractor.py`.
 A change to the LLM provider → swap the `LLMClient` implementation.
 
-The downstream triage engine (Task 01) receives an `ExtractedSubmission` and can
+The downstream triage engine (Task 03) receives an `ExtractedSubmission` and can
 apply its rules without knowing the data came from an LLM. The output contract is
 the same `Submission`-compatible shape.
 
@@ -219,7 +219,7 @@ mechanics that `instructor` abstracts away.
 
 **Pydantic validators `mode="before"` — why not raise on bad input?**
 
-In Task 01, validators raise on invalid revenue (it is a bug in the broker's system).
+In Task 03, validators raise on invalid revenue (it is a bug in the broker's system).
 Here, validators return `None` on invalid revenue (it is an expected LLM limitation).
 The same mechanism produces opposite behaviour because the *contract* is different.
 This distinction — "invalid input" vs "uncertain output" — is the core conceptual
@@ -253,7 +253,7 @@ secondary extraction strategy.
 ## File Structure
 
 ```
-task_04_llm_extraction/
+task_01_llm_extraction/
 ├── models.py       # ExtractedSubmission (Optional fields) + ExtractionResult
 ├── extractor.py    # LLMClient protocol + SubmissionExtractor + retry
 └── tests/

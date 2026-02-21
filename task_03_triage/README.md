@@ -1,4 +1,4 @@
-# Task 01 — Submission Triage & Validation
+# Task 03 — Submission Triage & Validation
 
 ## The Problem
 
@@ -295,7 +295,7 @@ logger.error(
 ## File Structure
 
 ```
-task_01_triage/
+task_03_triage/
 ├── models.py       # Pydantic models — the validation boundary
 ├── rules.py        # Strategy pattern — one class per business rule
 ├── engine.py       # Orchestrator — wires validation + rule chain together
