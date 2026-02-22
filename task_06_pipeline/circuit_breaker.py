@@ -87,8 +87,8 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
     ) -> None:
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
 
         self._state = CircuitState.CLOSED
         self._failure_count = 0
@@ -97,13 +97,25 @@ class CircuitBreaker:
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
+    # Read-only configuration properties                                   #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def failure_threshold(self) -> int:
+        return self._failure_threshold
+
+    @property
+    def recovery_timeout(self) -> float:
+        return self._recovery_timeout
+
+    # ------------------------------------------------------------------ #
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
     @property
     def state(self) -> CircuitState:
         with self._lock:
-            return self._current_state()
+            return self.__current_state()
 
     def allow_request(self) -> bool:
         """
@@ -111,7 +123,7 @@ class CircuitBreaker:
         Must be paired with record_success() or record_failure() after the call.
         """
         with self._lock:
-            state = self._current_state()
+            state = self.__current_state()
             # CLOSED: always allow. HALF_OPEN: allow the probe. OPEN: deny.
             return state in (CircuitState.CLOSED, CircuitState.HALF_OPEN)
 
@@ -126,23 +138,24 @@ class CircuitBreaker:
         """Call after a failed external call (after retries are exhausted)."""
         with self._lock:
             self._failure_count += 1
-            self._opened_at = time.monotonic()
-            if self._failure_count >= self.failure_threshold:
+            if self._failure_count >= self._failure_threshold:
                 self._state = CircuitState.OPEN
+                self._opened_at = time.monotonic()  # timer starts only when circuit opens
 
     # ------------------------------------------------------------------ #
     # Private                                                              #
     # ------------------------------------------------------------------ #
 
-    def _current_state(self) -> CircuitState:
+    def __current_state(self) -> CircuitState:
         """
         Evaluate the current state, applying the OPEN → HALF_OPEN
         time-based transition.  Must be called with self._lock held.
+        Name-mangled (__) to prevent accidental unlocked calls from subclasses.
         """
         if (
             self._state == CircuitState.OPEN
             and self._opened_at is not None
-            and time.monotonic() - self._opened_at >= self.recovery_timeout
+            and time.monotonic() - self._opened_at >= self._recovery_timeout
         ):
             self._state = CircuitState.HALF_OPEN
         return self._state

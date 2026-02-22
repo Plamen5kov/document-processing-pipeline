@@ -30,7 +30,7 @@ Real-world fit:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Optional
 
@@ -154,9 +154,7 @@ class IdempotencyHandler(Handler):
 
         if key in self._cache:
             logger.info("Idempotency hit — returning cached result for key=%s", key[:16])
-            cached: SubmissionContext = self._cache[key]
-            cached.was_replay = True
-            return cached  # ← short-circuit: chain stops here
+            return replace(self._cache[key], was_replay=True)  # ← short-circuit: copy, don't mutate the cache
 
         return self._next(ctx)  # ← pass to next handler
 
@@ -172,7 +170,7 @@ class ValidationHandler(Handler):
     _REQUIRED = ("company_id", "company_name", "revenue", "industry", "state")
 
     def handle(self, ctx: SubmissionContext) -> SubmissionContext:
-        missing = [f for f in self._REQUIRED if not ctx.payload.get(f)]
+        missing = [f for f in self._REQUIRED if ctx.payload.get(f) in (None, "")]
         if missing:
             ctx.status = PipelineStatus.ERROR
             ctx.add_error(f"Missing required fields: {missing}")
@@ -201,7 +199,7 @@ class TriageHandler(Handler):
 
     def handle(self, ctx: SubmissionContext) -> SubmissionContext:
         for rule in self._rules:
-            result = rule.evaluate_raw(ctx.payload)
+            result = rule.evaluate_raw(ctx)
             if result is not None:
                 ctx.status = result.status
                 ctx.triage_reason = result.reason
@@ -313,6 +311,7 @@ class SubmissionPipeline:
         rules: list,
         existing_ids: set[str],
         risk_db: dict,
+        breaker: Optional[CircuitBreaker] = None,
     ) -> None:
         # Build the chain: each set_next() returns the next handler
         # so the calls can be written as a readable left-to-right sequence.
@@ -321,7 +320,7 @@ class SubmissionPipeline:
             .set_next(ValidationHandler()) \
             .set_next(TriageHandler(rules)) \
             .set_next(DeduplicationHandler(existing_ids)) \
-            .set_next(EnrichmentHandler(risk_db))
+            .set_next(EnrichmentHandler(risk_db, breaker))
 
         self._head = head
         self._cache = cache
